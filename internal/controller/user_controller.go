@@ -191,3 +191,21 @@ func (uc *UserController) GetProfile(c *gin.Context) {
 		},
 	})
 }
+
+// GET /users/children
+func (uc *UserController) GetChildren(c *gin.Context) {
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
+		return
+	}
+	userID := userIDVal.(string)
+
+	var users []model.User
+	if err := uc.Service.DB.Where("parent_id = ?", userID).Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
+}

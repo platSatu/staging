@@ -30,5 +30,6 @@ func InitUserRoutes(r *gin.Engine, db *gorm.DB) {
 
 		// endpoint profile
 		userGroup.GET("/profile", userController.GetProfile)
+		userGroup.GET("/children", userController.GetChildren)
 	}
 }
