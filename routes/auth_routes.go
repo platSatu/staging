@@ -3,6 +3,7 @@ package routes
 import (
 	"backend_go/internal/controller"
 	"backend_go/internal/service"
+	"backend_go/middleware"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -19,6 +20,8 @@ func InitAuthRoutes(r *gin.Engine, db *gorm.DB) {
 
 	authGroup := r.Group("/auth") // prefix /auth
 	{
+		authGroup.Use(middleware.RateLimiter(5, 10))
+
 		authGroup.POST("/register", authController.Register)
 		authGroup.POST("/login", authController.Login)
 		authGroup.POST("/logout", authController.Logout)

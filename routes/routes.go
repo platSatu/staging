@@ -65,6 +65,34 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 
 	InitDepositRoutes(r, db)
 
+	InitTicketEventRoutes(r, db)
+
+	InitTicketRegisterRoutes(r, db)
+
+	InitTicketKategoriRoutes(r, db)
+
+	InitTicketJenisQuantityRoutes(r, db)
+
+	InitTicketMethodPembayaranRoutes(r, db)
+
+	InitTicketQrcodeRoutes(r, db)
+
+	InitTicketVoucherRoutes(r, db)
+
+	InitTicketResellerSettingRoutes(r, db)
+
+	InitTicketHistoryRoutes(r, db)
+
+	InitTicketEmailKategoryRoutes(r, db)
+
+	InitTicketTemplateRoutes(r, db)
+
+	InitTicketBlastRoutes(r, db)
+
+	InitTicketFeeSettingRoutes(r, db)
+
+	InitPurchaseRoutes(r, db)
+
 	// nanti bisa ditambahkan route lain, misal product, order, dsb
 	// InitProductRoutes(r, db)
 }
