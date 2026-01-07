@@ -214,8 +214,8 @@ func (s *UserService) UpdateUser(user *model.User) error {
 	if user.LastLogout != nil {
 		updateData["last_logout"] = user.LastLogout
 	}
-	if user.PartnerID != nil {
-		updateData["partner_id"] = user.PartnerID
+	if user.ParentID != nil { // Diubah dari PartnerID
+		updateData["parent_id"] = user.ParentID // Diubah dari "partner_id"
 	}
 	if user.KodeReferal != nil && *user.KodeReferal != "" {
 		updateData["kode_referal"] = user.KodeReferal

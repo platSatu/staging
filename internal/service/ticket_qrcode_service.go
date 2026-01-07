@@ -28,7 +28,7 @@ func (s *TicketQrcodeService) CreateTicketQrcode(ticketQrcode *model.TicketQrcod
 // READ ALL
 func (s *TicketQrcodeService) GetAllTicketQrcodes() ([]model.TicketQrcode, error) {
 	var ticketQrcodes []model.TicketQrcode
-	result := s.DB.Find(&ticketQrcodes)
+	result := s.DB.Order("created_at DESC").Find(&ticketQrcodes)
 	return ticketQrcodes, result.Error
 }
 

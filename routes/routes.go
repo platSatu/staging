@@ -93,6 +93,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 
 	InitPurchaseRoutes(r, db)
 
+	InitRegistrasiUlangRoutes(r, db)
+
+	InitTicketUserRoutes(r, db)
+
 	// nanti bisa ditambahkan route lain, misal product, order, dsb
 	// InitProductRoutes(r, db)
 }

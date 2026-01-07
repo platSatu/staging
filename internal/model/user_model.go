@@ -16,7 +16,7 @@ type User struct {
 	Role            string     `gorm:"default:'user'" json:"role"`
 	LastLogin       *time.Time `json:"last_login,omitempty"`
 	LastLogout      *time.Time `json:"last_logout,omitempty"`
-	PartnerID       *string    `json:"partner_id,omitempty"`
+	ParentID        *string    `json:"parent_id,omitempty"`
 	KodeReferal     *string    `json:"kode_referal,omitempty"` // boleh duplikat
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
 	RememberToken   *string    `json:"-"`

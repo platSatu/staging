@@ -1,16 +1,17 @@
 package controller
 
 import (
+	"backend_go/helper"
 	"backend_go/internal/model"
 	"backend_go/internal/request"
 	"backend_go/internal/service"
 	"net/http"
+	"strings"
 
-	"strings" // <- ini untuk TrimPrefix
+	//"strings" // <- ini untuk TrimPrefix
 
 	"github.com/gin-gonic/gin"
-
-	"backend_go/helper"
+	//"backend_go/helper"
 )
 
 type UserController struct {
@@ -191,6 +192,27 @@ func (uc *UserController) GetProfile(c *gin.Context) {
 		},
 	})
 }
+
+// func (uc *UserController) GetProfile(c *gin.Context) {
+// 	userAny, exists := c.Get("user")
+// 	if !exists {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+// 		return
+// 	}
+
+// 	user := userAny.(model.User)
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"success": true,
+// 		"data": gin.H{
+// 			"id":        user.ID,
+// 			"full_name": user.FullName,
+// 			"email":     user.Email,
+// 			"username":  user.Username,
+// 			"role":      user.Role, // 🔥 INI YANG FRONTEND BUTUH
+// 		},
+// 	})
+// }
 
 // GET /users/children
 func (uc *UserController) GetChildren(c *gin.Context) {

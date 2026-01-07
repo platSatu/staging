@@ -27,6 +27,11 @@ func (s *TicketKategoriService) CreateTicketKategori(ticketKategori *model.Ticke
 		ticketKategori.Status = "active"
 	}
 
+	// Set Sisa = StokAwal jika belum di-set (asumsi Terjual awalnya 0)
+	if ticketKategori.Sisa == 0 && ticketKategori.StokAwal > 0 {
+		ticketKategori.Sisa = ticketKategori.StokAwal
+	}
+
 	return s.DB.Create(ticketKategori).Error
 }
 

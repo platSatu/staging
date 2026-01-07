@@ -97,6 +97,8 @@ func main() {
 	// Setup routes
 	routes.SetupRoutes(r, db)
 
+	r.Static("/qrcodes", "./qrcode")
+
 	// HTTP Server dengan timeout
 	srv := &http.Server{
 		Addr:         ":7070",
