@@ -1,3 +1,4 @@
+// controller/voucher_controller.go
 package controller
 
 import (
@@ -20,10 +21,27 @@ func NewVoucherController(s *service.VoucherService) *VoucherController {
 	return &VoucherController{Service: s}
 }
 
-// CreateVoucher
+// CreateVoucher (Update: hanya input packages_id dari JSON, user_id dari token)
 func (vc *VoucherController) CreateVoucher(c *gin.Context) {
-	var voucher model.Voucher
-	if err := c.ShouldBindJSON(&voucher); err != nil {
+	// Ambil user_id dari token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	userID, err := helper.GetUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Bind JSON hanya untuk packages_id
+	var input struct {
+		PackagesID string `json:"packages_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -31,7 +49,8 @@ func (vc *VoucherController) CreateVoucher(c *gin.Context) {
 		return
 	}
 
-	if err := vc.Service.CreateVoucher(&voucher); err != nil {
+	voucher, err := vc.Service.CreateVoucher(userID, input.PackagesID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),

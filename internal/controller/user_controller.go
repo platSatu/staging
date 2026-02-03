@@ -156,7 +156,42 @@ func (uc *UserController) DeleteUser(c *gin.Context) {
 	})
 }
 
-// GetProfile
+// GetProfileTerakhir
+// func (uc *UserController) GetProfile(c *gin.Context) {
+// 	authHeader := c.GetHeader("Authorization")
+// 	if authHeader == "" {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+// 		return
+// 	}
+
+// 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+// 	userID, err := helper.GetUserIDFromToken(tokenString)
+// 	if err != nil {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+// 		return
+// 	}
+
+// 	user, err := uc.Service.GetUserByID(userID)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
+// 	if user == nil {
+// 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+// 		return
+// 	}
+
+//		c.JSON(http.StatusOK, gin.H{
+//			"success": true,
+//			"data": gin.H{
+//				"id":        user.ID,
+//				"full_name": user.FullName,
+//				"email":     user.Email,
+//				"username":  user.Username,
+//				"role":      user.Role,
+//			},
+//		})
+//	}
 func (uc *UserController) GetProfile(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
@@ -181,6 +216,10 @@ func (uc *UserController) GetProfile(c *gin.Context) {
 		return
 	}
 
+	// Ambil ParentID dan akses paket / aplikasi yang di daftarkan
+	parentID := user.ParentID
+	akses, _ := uc.Service.GetAksesByUser(user.ID) // misal ambil daftar aplikasi/menu
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -189,6 +228,8 @@ func (uc *UserController) GetProfile(c *gin.Context) {
 			"email":     user.Email,
 			"username":  user.Username,
 			"role":      user.Role,
+			"parent_id": parentID,
+			"akses":     akses, // array berisi aplikasi, status, dan menu yang boleh diakses
 		},
 	})
 }

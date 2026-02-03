@@ -18,7 +18,7 @@ func InitUserRoutes(r *gin.Engine, db *gorm.DB) {
 		// Auth middleware untuk semua endpoint user
 		userGroup.Use(
 			middleware.AuthMiddleware(userService),
-			middleware.RoleMiddleware("admin", "user"),
+			middleware.RoleMiddleware("admin", "user", "admin_events"),
 		)
 
 		// 🔥 PENTING: jangan pakai slash "/" di akhir!

@@ -267,3 +267,25 @@ func (s *UserService) generateKodeReferal(username string) (string, error) {
 func (s *UserService) GetUserProfile(userID string) (*model.User, error) {
 	return s.GetUserByID(userID)
 }
+
+func (s *UserService) GetAksesByUser(userID string) ([]map[string]interface{}, error) {
+	var aksesList []map[string]interface{}
+
+	// Ambil data type_user_aplikasi dari DB
+	var typeUser []model.TypeUserAplikasi
+	err := s.DB.Where("user_id = ?", userID).Find(&typeUser).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Format data sesuai kebutuhan frontend
+	for _, t := range typeUser {
+		aksesList = append(aksesList, map[string]interface{}{
+			"aplikasi_id": t.AplikasiID,
+			"status":      t.Status,
+			"parent_id":   t.ParentID,
+		})
+	}
+
+	return aksesList, nil
+}

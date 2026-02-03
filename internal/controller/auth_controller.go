@@ -93,14 +93,32 @@ func (c *AuthController) Login(ctx *gin.Context) {
 }
 
 // Refresh token endpoint, baca cookie
+// func (c *AuthController) Refresh(ctx *gin.Context) {
+// 	var req RefreshRequest
+// 	if err := ctx.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+// 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token tidak ditemukan"})
+// 		return
+// 	}
+
+// 	res, err := c.AuthService.Refresh(req.RefreshToken)
+// 	if err != nil {
+// 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+// 		return
+// 	}
+
+//		ctx.JSON(http.StatusOK, gin.H{
+//			"success":      true,
+//			"access_token": res["access_token"],
+//		})
+//	}
 func (c *AuthController) Refresh(ctx *gin.Context) {
-	var req RefreshRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+	refreshToken, err := ctx.Cookie("refresh_token")
+	if err != nil || refreshToken == "" {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token tidak ditemukan"})
 		return
 	}
 
-	res, err := c.AuthService.Refresh(req.RefreshToken)
+	res, err := c.AuthService.Refresh(refreshToken)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -112,14 +130,41 @@ func (c *AuthController) Refresh(ctx *gin.Context) {
 	})
 }
 
+// func (c *AuthController) Logout(ctx *gin.Context) {
+// 	var req request.RefreshRequest
+// 	if err := ctx.ShouldBindJSON(&req); err != nil {
+// 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
+// 		return
+// 	}
+
+// 	err := c.AuthService.Logout(req.RefreshToken)
+// 	if err != nil {
+// 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
+
+//		ctx.JSON(http.StatusOK, gin.H{"message": "logout berhasil"})
+//	}
+//
+// auth controller function logout (diperbaiki)
 func (c *AuthController) Logout(ctx *gin.Context) {
-	var req request.RefreshRequest
+	// Ambil refresh token dari body JSON, bukan cookie
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token diperlukan"})
 		return
 	}
 
-	err := c.AuthService.Logout(req.RefreshToken)
+	refreshToken := req.RefreshToken
+	if refreshToken == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token tidak tersedia"})
+		return
+	}
+
+	// Revoke token
+	err := c.AuthService.Logout(refreshToken)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

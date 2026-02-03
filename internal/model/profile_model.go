@@ -12,7 +12,7 @@ import (
 type Profile struct {
 	ID          string    `gorm:"primaryKey;type:char(36)" json:"id"`
 	UserID      string    `gorm:"not null;type:char(36)" json:"user_id"`
-	BussinesID  int       `gorm:"unique;not null" json:"bussines_id"`
+	BussinesID  int       `gorm:"autoIncrement;unique;not null" json:"bussines_id"`
 	Name        string    `gorm:"not null" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
 	Slug        string    `gorm:"unique;not null" json:"slug"`
@@ -37,7 +37,7 @@ func (p *Profile) BeforeCreate(tx *gorm.DB) (err error) {
 
 	// Generate slug dari name
 	if p.Name != "" {
-		p.Slug = generateSlug(p.Name)
+		p.Slug = GenerateSlug(p.Name) // Gunakan fungsi diekspor
 	}
 
 	// Set default status jika kosong
@@ -47,8 +47,8 @@ func (p *Profile) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// generateSlug membuat slug dari name: lowercase, replace spasi dengan "-", remove karakter aneh
-func generateSlug(name string) string {
+// GenerateSlug membuat slug dari name: lowercase, replace spasi dengan "-", remove karakter aneh (diekspor dengan huruf besar)
+func GenerateSlug(name string) string {
 	// Lowercase
 	slug := strings.ToLower(name)
 	// Replace spasi dengan "-"

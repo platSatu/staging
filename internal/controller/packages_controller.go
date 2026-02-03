@@ -4,12 +4,11 @@ import (
 	"backend_go/internal/model"
 	"backend_go/internal/service"
 	"net/http"
-
 	"strings"
 
-	"github.com/gin-gonic/gin"
-
 	"backend_go/helper"
+
+	"github.com/gin-gonic/gin"
 )
 
 type PackagesController struct {
@@ -18,6 +17,15 @@ type PackagesController struct {
 
 func NewPackagesController(s *service.PackagesService) *PackagesController {
 	return &PackagesController{Service: s}
+}
+
+// Helper function to determine status code based on error
+func getStatusCodeFromError(err error) int {
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "required") || strings.Contains(errMsg, "must be") {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
 }
 
 // CreatePackages
@@ -32,7 +40,8 @@ func (pc *PackagesController) CreatePackages(c *gin.Context) {
 	}
 
 	if err := pc.Service.CreatePackages(&pkg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		statusCode := getStatusCodeFromError(err)
+		c.JSON(statusCode, gin.H{
 			"success": false,
 			"error":   err.Error(),
 		})
@@ -74,7 +83,7 @@ func (pc *PackagesController) GetPackagesByID(c *gin.Context) {
 	if pkg == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
-			"error":   "Packages not found",
+			"error":   "Package not found",
 		})
 		return
 	}
@@ -128,7 +137,8 @@ func (pc *PackagesController) UpdatePackages(c *gin.Context) {
 	}
 
 	if err := pc.Service.UpdatePackages(&updateData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		statusCode := getStatusCodeFromError(err)
+		c.JSON(statusCode, gin.H{
 			"success": false,
 			"error":   err.Error(),
 		})
@@ -139,7 +149,7 @@ func (pc *PackagesController) UpdatePackages(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to fetch updated packages",
+			"error":   "Failed to fetch updated package",
 		})
 		return
 	}
@@ -162,6 +172,6 @@ func (pc *PackagesController) DeletePackages(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Packages deleted",
+		"message": "Package deleted",
 	})
 }

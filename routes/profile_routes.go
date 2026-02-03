@@ -14,17 +14,27 @@ func InitProfileRoutes(r *gin.Engine, db *gorm.DB) {
 	profileController := controller.NewProfileController(profileService)
 
 	profileGroup := r.Group("/profiles")
+	profileGroup.Use(middleware.AuthMiddleware(service.NewUserService(db)))
 	{
-		profileGroup.Use(
-			middleware.AuthMiddleware(service.NewUserService(db)), // Menggunakan UserService untuk auth
-			middleware.RoleMiddleware("admin", "user"),
-		)
+		// Admin only
+		adminGroup := profileGroup.Group("")
+		adminGroup.Use(middleware.RoleMiddleware("admin"))
+		{
+			adminGroup.GET("", profileController.GetAllProfiles) // Hanya admin
+		}
 
-		profileGroup.POST("", profileController.CreateProfile)
-		profileGroup.GET("", profileController.GetAllProfiles)
-		profileGroup.GET("/:id", profileController.GetProfileByID)
-		profileGroup.GET("/user", profileController.GetProfilesByUser) // Endpoint khusus untuk user login
-		profileGroup.PUT("/:id", profileController.UpdateProfile)
-		profileGroup.DELETE("/:id", profileController.DeleteProfile)
+		// User dan admin
+		userGroup := profileGroup.Group("")
+		userGroup.Use(middleware.RoleMiddleware("admin", "user"))
+		{
+			userGroup.POST("", profileController.CreateProfile)
+			userGroup.GET("/:id", profileController.GetProfileByID)
+			userGroup.GET("/user", profileController.GetProfilesByUser)
+			userGroup.PUT("/:id", profileController.UpdateProfile)
+			userGroup.DELETE("/:id", profileController.DeleteProfile)
+
+			// Tambahkan di dalam profileGroup
+			profileGroup.GET("/check", profileController.CheckUserHasProfile) // Bisa diakses user biasa
+		}
 	}
 }

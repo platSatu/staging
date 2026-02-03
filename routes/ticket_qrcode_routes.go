@@ -10,7 +10,7 @@ import (
 )
 
 func InitTicketQrcodeRoutes(r *gin.Engine, db *gorm.DB) {
-	userService := service.NewUserService(db) 
+	userService := service.NewUserService(db)
 	ticketQrcodeService := service.NewTicketQrcodeService(db)
 	ticketQrcodeController := controller.NewTicketQrcodeController(ticketQrcodeService)
 
@@ -18,7 +18,7 @@ func InitTicketQrcodeRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		ticketQrcodeGroup.Use(
 			middleware.AuthMiddleware(userService), // Asumsikan middleware serupa, sesuaikan jika perlu
-			middleware.RoleMiddleware("admin", "user"),
+			middleware.RoleMiddleware("admin", "user", "admin_events"),
 		)
 
 		ticketQrcodeGroup.POST("", ticketQrcodeController.CreateTicketQrcode)

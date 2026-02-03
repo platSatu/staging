@@ -21,7 +21,7 @@ func InitTicketHistoryRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		ticketHistoryGroup.Use(
 			middleware.AuthMiddleware(userService), // ✅ FIX
-			middleware.RoleMiddleware("admin", "user"),
+			middleware.RoleMiddleware("admin", "user", "admin_events"),
 		)
 
 		ticketHistoryGroup.POST("", ticketHistoryController.CreateTicketHistory)

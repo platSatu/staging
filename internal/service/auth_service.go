@@ -81,15 +81,38 @@ func (s *AuthService) generateAccessToken(user model.User) (string, error) {
 }
 
 // ================= Refresh Token =================
-func (s *AuthService) generateRefreshToken(user model.User) (string, time.Time, error) {
-	token := uuid.New().String() + "." + uuid.New().String()
-	expires := time.Now().Add(refreshTokenTTL)
+// func (s *AuthService) generateRefreshToken(user model.User) (string, time.Time, error) {
+// 	token := uuid.New().String() + "." + uuid.New().String()
+// 	expires := time.Now().Add(refreshTokenTTL)
 
+// 	refresh := model.RefreshToken{
+// 		ID:        uuid.New().String(),
+// 		UserID:    user.ID,
+// 		Token:     token,
+// 		ExpiresAt: expires,
+// 		Revoked:   false,
+// 	}
+
+// 	if err := s.DB.Create(&refresh).Error; err != nil {
+// 		return "", time.Time{}, err
+// 	}
+
+//		return token, expires, nil
+//	}
+func (s *AuthService) generateRefreshToken(user model.User) (string, time.Time, error) {
+	// Buat token unik
+	token := uuid.New().String() + "." + uuid.New().String()
+
+	// TTL refresh token (misal 24 jam)
+	refreshTokenTTL := 24 * time.Hour
+	expires := time.Now().Add(refreshTokenTTL) // ⬅️ harus ditambahkan ke waktu sekarang
+
+	// Simpan ke database
 	refresh := model.RefreshToken{
 		ID:        uuid.New().String(),
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: expires,
+		ExpiresAt: expires, // waktu expired benar
 		Revoked:   false,
 	}
 
@@ -97,6 +120,7 @@ func (s *AuthService) generateRefreshToken(user model.User) (string, time.Time, 
 		return "", time.Time{}, err
 	}
 
+	// Kembalikan token dan waktu expired untuk frontend/response
 	return token, expires, nil
 }
 

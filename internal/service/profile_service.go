@@ -4,8 +4,6 @@ import (
 	"backend_go/internal/model"
 	"errors"
 	"fmt"
-	"regexp"
-	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,8 +17,8 @@ func NewProfileService(db *gorm.DB) *ProfileService {
 	return &ProfileService{DB: db}
 }
 
-// CREATE
-func (s *ProfileService) CreateProfile(profile *model.Profile) error {
+// CREATE - Profil dibuat untuk user yang login
+func (s *ProfileService) CreateProfile(profile *model.Profile, userID string) error {
 	if profile.ID == "" {
 		profile.ID = uuid.New().String()
 	}
@@ -33,15 +31,10 @@ func (s *ProfileService) CreateProfile(profile *model.Profile) error {
 		profile.Status = "active"
 	}
 
-	// Generate bussines_id unik (increment dari max di database)
-	var maxBussinesID int
-	err := s.DB.Model(&model.Profile{}).Select("COALESCE(MAX(bussines_id), 0)").Scan(&maxBussinesID).Error
-	if err != nil {
-		return fmt.Errorf("failed to generate bussines_id: %v", err)
-	}
-	profile.BussinesID = maxBussinesID + 1
+	// Set UserID dari parameter (dari token)
+	profile.UserID = userID
 
-	// Validasi user_id ada di tabel users (opsional, jika ingin foreign key constraint)
+	// Validasi user_id ada di tabel users
 	var user model.User
 	if err := s.DB.First(&user, "id = ?", profile.UserID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -50,43 +43,53 @@ func (s *ProfileService) CreateProfile(profile *model.Profile) error {
 		return err
 	}
 
+	// BussinesID sekarang auto-increment, tidak perlu generate manual
 	return s.DB.Create(profile).Error
 }
 
-// READ ALL
-func (s *ProfileService) GetAllProfiles() ([]model.Profile, error) {
-	var profiles []model.Profile
-	result := s.DB.Find(&profiles)
-	return profiles, result.Error
+// READ ALL - Ubah jadi GetProfilesByUserID (user hanya lihat profilnya sendiri)
+func (s *ProfileService) GetAllProfiles(userID string) ([]model.Profile, error) {
+	// Alias untuk GetProfilesByUserID, karena semua user hanya lihat profil mereka sendiri
+	return s.GetProfilesByUserID(userID)
 }
 
-// READ BY ID
-func (s *ProfileService) GetProfileByID(id string) (*model.Profile, error) {
+// READ BY ID - User hanya bisa lihat profilnya sendiri
+func (s *ProfileService) GetProfileByID(id string, userID string) (*model.Profile, error) {
 	var profile model.Profile
-	result := s.DB.First(&profile, "id = ?", id)
+	result := s.DB.Where("id = ? AND user_id = ?", id, userID).First(&profile)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	return &profile, result.Error
 }
 
-// READ BY USER ID
+// READ BY USER ID - Sudah filter berdasarkan userID
 func (s *ProfileService) GetProfilesByUserID(userID string) ([]model.Profile, error) {
 	var profiles []model.Profile
 	result := s.DB.Where("user_id = ?", userID).Find(&profiles)
 	return profiles, result.Error
 }
 
-// UPDATE
-func (s *ProfileService) UpdateProfile(profile *model.Profile) error {
+// CHECK USER HAS PROFILE - Mengecek apakah user sudah punya profile
+func (s *ProfileService) CheckUserHasProfile(userID string) (bool, error) {
+	var count int64
+	err := s.DB.Model(&model.Profile{}).Where("user_id = ?", userID).Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check user profile: %v", err)
+	}
+	return count > 0, nil
+}
+
+// UPDATE - User hanya bisa update profilnya sendiri
+func (s *ProfileService) UpdateProfile(profile *model.Profile, userID string) error {
 	if profile.ID == "" {
 		return fmt.Errorf("ID is required for update")
 	}
 
 	var oldProfile model.Profile
-	if err := s.DB.First(&oldProfile, "id = ?", profile.ID).Error; err != nil {
+	if err := s.DB.Where("id = ? AND user_id = ?", profile.ID, userID).First(&oldProfile).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("profile not found")
+			return fmt.Errorf("profile not found or access denied")
 		}
 		return err
 	}
@@ -95,8 +98,7 @@ func (s *ProfileService) UpdateProfile(profile *model.Profile) error {
 
 	if profile.Name != "" && profile.Name != oldProfile.Name {
 		updateData["name"] = profile.Name
-		// Regenerate slug jika name berubah
-		updateData["slug"] = generateSlug(profile.Name)
+		updateData["slug"] = model.GenerateSlug(profile.Name)
 	}
 
 	if profile.Description != "" && profile.Description != oldProfile.Description {
@@ -119,38 +121,15 @@ func (s *ProfileService) UpdateProfile(profile *model.Profile) error {
 		updateData["status"] = profile.Status
 	}
 
-	if profile.UserID != "" && profile.UserID != oldProfile.UserID {
-		// Validasi user_id baru ada
-		var user model.User
-		if err := s.DB.First(&user, "id = ?", profile.UserID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("user not found")
-			}
-			return err
-		}
-		updateData["user_id"] = profile.UserID
-	}
-
+	// User tidak bisa ubah user_id (hanya milik mereka sendiri)
 	if len(updateData) == 0 {
 		return nil // Tidak ada yang diupdate
 	}
 
-	return s.DB.Model(&model.Profile{}).Where("id = ?", profile.ID).Updates(updateData).Error
+	return s.DB.Model(&model.Profile{}).Where("id = ? AND user_id = ?", profile.ID, userID).Updates(updateData).Error
 }
 
-// DELETE
-func (s *ProfileService) DeleteProfile(id string) error {
-	return s.DB.Delete(&model.Profile{}, "id = ?", id).Error
-}
-
-// generateSlug helper (duplikat dari model, untuk konsistensi)
-func generateSlug(name string) string {
-	reg := regexp.MustCompile(`[^a-z0-9-]+`)
-	slug := strings.ToLower(name)
-	slug = strings.ReplaceAll(slug, " ", "-")
-	slug = reg.ReplaceAllString(slug, "")
-	reg2 := regexp.MustCompile(`-+`)
-	slug = reg2.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
-	return slug
+// DELETE - User hanya bisa hapus profilnya sendiri
+func (s *ProfileService) DeleteProfile(id string, userID string) error {
+	return s.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Profile{}).Error
 }

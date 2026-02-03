@@ -23,7 +23,7 @@ func InitTicketKategoriRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		ticketKategoriGroup.Use(
 			middleware.AuthMiddleware(userService), // ✅ FIX
-			middleware.RoleMiddleware("admin", "user"),
+			middleware.RoleMiddleware("admin", "user", "admin_events"),
 		)
 
 		ticketKategoriGroup.POST("", ticketKategoriController.CreateTicketKategori)

@@ -1,3 +1,4 @@
+// model/voucher_model.go
 package model
 
 import (
@@ -10,6 +11,7 @@ import (
 type Voucher struct {
 	ID          string     `gorm:"primaryKey;type:char(36)" json:"id"`
 	UserID      string     `gorm:"not null;type:char(36)" json:"user_id"`
+	PackagesID  string     `gorm:"type:char(36)" json:"packages_id"`
 	KodeVoucher string     `gorm:"unique;not null" json:"kode_voucher"`
 	Status      string     `gorm:"default:'active'" json:"status"`
 	ValidFrom   *time.Time `gorm:"type:date" json:"valid_from"`

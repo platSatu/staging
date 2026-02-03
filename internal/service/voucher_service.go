@@ -1,3 +1,4 @@
+// service/voucher_service.go
 package service
 
 import (
@@ -6,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,37 +21,49 @@ func NewVoucherService(db *gorm.DB) *VoucherService {
 	return &VoucherService{DB: db}
 }
 
-// CREATE
-func (s *VoucherService) CreateVoucher(voucher *model.Voucher) error {
-	if voucher.ID == "" {
-		voucher.ID = uuid.New().String()
-	}
-
-	if voucher.Status == "" {
-		voucher.Status = "active"
-	}
-
-	// Generate kode_voucher unik (5 angka + 5 huruf, total 10 karakter)
-	voucher.KodeVoucher = s.generateUniqueKodeVoucher()
-
-	// Validasi user_id ada di tabel users (opsional, jika ingin foreign key constraint)
-	var user model.User
-	if err := s.DB.First(&user, "id = ?", voucher.UserID).Error; err != nil {
+// CREATE (Update untuk generate kode_voucher, status, valid_from, valid_until berdasarkan packages_id)
+func (s *VoucherService) CreateVoucher(userID, packagesID string) (*model.Voucher, error) {
+	// Validasi packages_id ada di tabel packages
+	var pkg model.Packages
+	if err := s.DB.First(&pkg, "id = ?", packagesID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("user not found")
+			return nil, fmt.Errorf("package not found")
 		}
-		return err
+		return nil, err
 	}
 
-	// Validasi valid_from dan valid_until jika ada
-	if voucher.ValidFrom != nil && voucher.ValidUntil != nil && voucher.ValidFrom.After(*voucher.ValidUntil) {
-		return fmt.Errorf("valid_from cannot be after valid_until")
+	// Validasi user_id ada di tabel users
+	var user model.User
+	if err := s.DB.First(&user, "id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, err
 	}
 
-	return s.DB.Create(voucher).Error
+	// Generate kode_voucher unik (KSD + 8 angka)
+	kodeVoucher := s.generateUniqueKodeVoucher()
+
+	// Set valid_from = sekarang, valid_until = valid_from + duration_days
+	now := time.Now()
+	validFrom := &now
+	validUntil := &time.Time{}
+	*validUntil = now.AddDate(0, 0, pkg.DurationDays)
+
+	voucher := &model.Voucher{
+		ID:          uuid.New().String(),
+		UserID:      userID,
+		PackagesID:  packagesID,
+		KodeVoucher: kodeVoucher,
+		Status:      "active",
+		ValidFrom:   validFrom,
+		ValidUntil:  validUntil,
+	}
+
+	return voucher, s.DB.Create(voucher).Error
 }
 
-// generateUniqueKodeVoucher membuat kode voucher unik: 5 angka + 5 huruf
+// generateUniqueKodeVoucher membuat kode voucher unik: KSD + 8 angka
 func (s *VoucherService) generateUniqueKodeVoucher() string {
 	for {
 		kode := generateKodeVoucher()
@@ -63,22 +77,15 @@ func (s *VoucherService) generateUniqueKodeVoucher() string {
 	}
 }
 
-// generateKodeVoucher helper: 5 angka + 5 huruf
+// generateKodeVoucher helper: KSD + 8 angka
 func generateKodeVoucher() string {
 	const digits = "0123456789"
-	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	var kode string
+	kode := "KSD"
 
-	// 5 angka
-	for i := 0; i < 5; i++ {
+	// 8 angka
+	for i := 0; i < 8; i++ {
 		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
 		kode += string(digits[num.Int64()])
-	}
-
-	// 5 huruf
-	for i := 0; i < 5; i++ {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
-		kode += string(letters[num.Int64()])
 	}
 
 	return kode
@@ -156,6 +163,18 @@ func (s *VoucherService) UpdateVoucher(voucher *model.Voucher) error {
 			return err
 		}
 		updateData["user_id"] = voucher.UserID
+	}
+
+	if voucher.PackagesID != "" && voucher.PackagesID != oldVoucher.PackagesID {
+		// Validasi packages_id baru ada
+		var pkg model.Packages
+		if err := s.DB.First(&pkg, "id = ?", voucher.PackagesID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("package not found")
+			}
+			return err
+		}
+		updateData["packages_id"] = voucher.PackagesID
 	}
 
 	// Validasi valid_from dan valid_until jika diupdate
