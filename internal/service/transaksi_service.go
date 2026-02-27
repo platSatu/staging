@@ -294,3 +294,17 @@ func (s *TransaksiService) UpdateTransaksi(transaksi *model.Transaksi) error {
 func (s *TransaksiService) DeleteTransaksi(id string) error {
 	return s.DB.Delete(&model.Transaksi{}, "id = ?", id).Error
 }
+
+// GetTransaksiByUserID returns transaksi based on parent_id
+func (s *TransaksiService) GetTransaksiByParentID(parentID string) ([]model.Transaksi, error) {
+	var transaksis []model.Transaksi
+
+	// Tampilkan semua transaksi dimana parent_id = user yang login
+	result := s.DB.Preload("User").
+		Preload("Kewajiban").
+		Where("parent_id = ?", parentID).
+		Order("created_at DESC").
+		Find(&transaksis)
+
+	return transaksis, result.Error
+}

@@ -17,9 +17,17 @@ func NewDepositController(s *service.DepositService) *DepositController {
 }
 
 // CreateDeposit
+// CreateDeposit
 func (dc *DepositController) CreateDeposit(c *gin.Context) {
-	var deposit model.Deposit
-	if err := c.ShouldBindJSON(&deposit); err != nil {
+	var req struct {
+		Kredit          float64 `json:"kredit"`
+		Debit           float64 `json:"debit"`
+		TransaksiStatus string  `json:"transaksi_status"`
+		TransaksiMethod string  `json:"transaksi_method"`
+		Keterangan      string  `json:"keterangan"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -27,22 +35,51 @@ func (dc *DepositController) CreateDeposit(c *gin.Context) {
 		return
 	}
 
-	if err := dc.Service.CreateDeposit(&deposit); err != nil {
+	// ambil user_id dari token
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "unauthorized",
+		})
+		return
+	}
+
+	deposit := &model.Deposit{
+		UserID:          userID.(string),
+		Kredit:          req.Kredit,
+		Debit:           req.Debit,
+		TransaksiStatus: req.TransaksiStatus,
+		TransaksiMethod: req.TransaksiMethod,
+		Keterangan:      req.Keterangan,
+	}
+
+	if err := dc.Service.CreateDeposit(deposit); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return
 	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    deposit,
 	})
 }
 
-// GetAllDeposits
+// GetAllDeposits (hanya milik user login)
 func (dc *DepositController) GetAllDeposits(c *gin.Context) {
-	deposits, err := dc.Service.GetAllDeposits()
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "unauthorized",
+		})
+		return
+	}
+
+	deposits, err := dc.Service.GetDepositsByUserID(userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -50,6 +87,7 @@ func (dc *DepositController) GetAllDeposits(c *gin.Context) {
 		})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    deposits,
@@ -59,6 +97,7 @@ func (dc *DepositController) GetAllDeposits(c *gin.Context) {
 // GetDepositByID
 func (dc *DepositController) GetDepositByID(c *gin.Context) {
 	id := c.Param("id")
+
 	deposit, err := dc.Service.GetDepositByID(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -74,6 +113,17 @@ func (dc *DepositController) GetDepositByID(c *gin.Context) {
 		})
 		return
 	}
+
+	// hanya pemilik deposit boleh melihat
+	userID, _ := c.Get("userID")
+	if deposit.UserID != userID.(string) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "forbidden",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    deposit,
@@ -108,10 +158,16 @@ func (dc *DepositController) GetDepositsByUser(c *gin.Context) {
 // UpdateDeposit
 func (dc *DepositController) UpdateDeposit(c *gin.Context) {
 	id := c.Param("id")
-	var updateData model.Deposit
-	updateData.ID = id
 
-	if err := c.ShouldBindJSON(&updateData); err != nil {
+	var req struct {
+		Kredit          float64 `json:"kredit"`
+		Debit           float64 `json:"debit"`
+		TransaksiStatus string  `json:"transaksi_status"`
+		TransaksiMethod string  `json:"transaksi_method"`
+		Keterangan      string  `json:"keterangan"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -119,7 +175,35 @@ func (dc *DepositController) UpdateDeposit(c *gin.Context) {
 		return
 	}
 
-	if err := dc.Service.UpdateDeposit(&updateData); err != nil {
+	// pastikan deposit itu milik user login
+	existing, err := dc.Service.GetDepositByID(id)
+	if err != nil || existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Deposit not found",
+		})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+	if existing.UserID != userID.(string) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "forbidden",
+		})
+		return
+	}
+
+	updateData := &model.Deposit{
+		ID:              id,
+		Kredit:          req.Kredit,
+		Debit:           req.Debit,
+		TransaksiStatus: req.TransaksiStatus,
+		TransaksiMethod: req.TransaksiMethod,
+		Keterangan:      req.Keterangan,
+	}
+
+	if err := dc.Service.UpdateDeposit(updateData); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -127,24 +211,36 @@ func (dc *DepositController) UpdateDeposit(c *gin.Context) {
 		return
 	}
 
-	deposit, err := dc.Service.GetDepositByID(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to fetch updated deposit",
-		})
-		return
-	}
+	updated, _ := dc.Service.GetDepositByID(id)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    deposit,
+		"data":    updated,
 	})
 }
 
 // DeleteDeposit
 func (dc *DepositController) DeleteDeposit(c *gin.Context) {
 	id := c.Param("id")
+
+	deposit, err := dc.Service.GetDepositByID(id)
+	if err != nil || deposit == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Deposit not found",
+		})
+		return
+	}
+
+	userID, _ := c.Get("userID")
+	if deposit.UserID != userID.(string) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "forbidden",
+		})
+		return
+	}
+
 	if err := dc.Service.DeleteDeposit(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -152,6 +248,7 @@ func (dc *DepositController) DeleteDeposit(c *gin.Context) {
 		})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Deposit deleted",

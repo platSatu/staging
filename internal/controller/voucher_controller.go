@@ -21,6 +21,49 @@ func NewVoucherController(s *service.VoucherService) *VoucherController {
 	return &VoucherController{Service: s}
 }
 
+// BuyPackage
+func (vc *VoucherController) BuyPackage(c *gin.Context) {
+	var req struct {
+		PackagesID string `json:"packages_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Ambil user_id dari token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	userID, err := helper.GetUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	voucher, err := vc.Service.BuyPackage(userID, req.PackagesID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data":    voucher,
+	})
+}
+
 // CreateVoucher (Update: hanya input packages_id dari JSON, user_id dari token)
 func (vc *VoucherController) CreateVoucher(c *gin.Context) {
 	// Ambil user_id dari token
@@ -182,5 +225,49 @@ func (vc *VoucherController) DeleteVoucher(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Voucher deleted",
+	})
+}
+
+// RedeemVoucher
+func (vc *VoucherController) RedeemVoucher(c *gin.Context) {
+	var req struct {
+		KodeVoucher string `json:"kode_voucher" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Ambil user_id dari token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	userID, err := helper.GetUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	voucher, err := vc.Service.RedeemVoucher(userID, req.KodeVoucher)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    voucher,
+		"message": "Voucher redeemed successfully",
 	})
 }

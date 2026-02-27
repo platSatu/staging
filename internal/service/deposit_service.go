@@ -57,21 +57,62 @@ func (s *DepositService) GenerateOrderID() (string, error) {
 	return s.generateUniqueNumber("ORD-", 6, "order_id")
 }
 
+// GetLastSaldoByUserID gets the last saldo for a user
+func (s *DepositService) GetLastSaldoByUserID(userID string) (float64, error) {
+	var lastDeposit model.Deposit
+	result := s.DB.Where("user_id = ?", userID).Order("created_at DESC").First(&lastDeposit)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return 0, nil // Jika belum ada deposit, saldo 0
+	}
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return lastDeposit.Saldo, nil
+}
+
 // CREATE
 func (s *DepositService) CreateDeposit(deposit *model.Deposit) error {
+	// Validasi kredit minimal 10.000 jika kredit > 0
+	if deposit.Kredit > 0 && deposit.Kredit < 10000 {
+		return fmt.Errorf("kredit must be at least 10,000 if positive")
+	}
+	if deposit.Debit < 0 {
+		return fmt.Errorf("debit cannot be negative")
+	}
+
+	// Ambil saldo terakhir user
+	lastSaldo, err := s.GetLastSaldoByUserID(deposit.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to get last saldo: %v", err)
+	}
+
+	// Hitung saldo baru: saldo terakhir + kredit - debit
+	newSaldo := lastSaldo + deposit.Kredit - deposit.Debit
+	deposit.Saldo = newSaldo
+
+	// Set transaksi_tanggal jika belum ada
+	if deposit.TransaksiTanggal.IsZero() {
+		deposit.TransaksiTanggal = time.Now()
+	}
+
 	// Generate unique no_invoice and order_id
 	noInvoice, err := s.GenerateNoInvoice()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate no_invoice: %v", err)
 	}
 	orderID, err := s.GenerateOrderID()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate order_id: %v", err)
 	}
 	deposit.NoInvoice = noInvoice
 	deposit.OrderID = orderID
 
-	return s.DB.Create(deposit).Error
+	// Simpan ke database
+	if err := s.DB.Create(deposit).Error; err != nil {
+		return fmt.Errorf("failed to create deposit: %v", err)
+	}
+
+	return nil
 }
 
 // READ ALL

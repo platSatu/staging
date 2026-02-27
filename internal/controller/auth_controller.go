@@ -111,22 +111,54 @@ func (c *AuthController) Login(ctx *gin.Context) {
 //			"access_token": res["access_token"],
 //		})
 //	}
+// func (c *AuthController) Refresh(ctx *gin.Context) {
+// 	refreshToken, err := ctx.Cookie("refresh_token")
+// 	if err != nil || refreshToken == "" {
+// 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token tidak ditemukan"})
+// 		return
+// 	}
+
+// 	res, err := c.AuthService.Refresh(refreshToken)
+// 	if err != nil {
+// 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+// 		return
+// 	}
+
+//		ctx.JSON(http.StatusOK, gin.H{
+//			"success":      true,
+//			"access_token": res["access_token"],
+//		})
+//	}
 func (c *AuthController) Refresh(ctx *gin.Context) {
+	// Ambil refresh token dari cookie
 	refreshToken, err := ctx.Cookie("refresh_token")
 	if err != nil || refreshToken == "" {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token tidak ditemukan"})
 		return
 	}
 
-	res, err := c.AuthService.Refresh(refreshToken)
+	// Panggil service refresh
+	newAccessToken, newRefreshToken, err := c.AuthService.Refresh(refreshToken)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
+	// Set cookie baru untuk refresh token (rotation)
+	ctx.SetCookie(
+		"refresh_token",
+		newRefreshToken,
+		7*24*60*60, // 7 hari
+		"/",
+		"backend.gbigatsu.id", // domain, bisa dikosongkan untuk localhost
+		true,                  // secure
+		true,                  // httpOnly
+	)
+
+	// Kirim access token ke frontend
 	ctx.JSON(http.StatusOK, gin.H{
 		"success":      true,
-		"access_token": res["access_token"],
+		"access_token": newAccessToken,
 	})
 }
 

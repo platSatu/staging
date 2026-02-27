@@ -97,6 +97,48 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 
 	InitTicketUserRoutes(r, db)
 
+	InitScHabitsRoutes(r, db)
+
+	InitScSubHabitsRoutes(r, db)
+
+	InitScAlphabetProgressRoutes(r, db)
+
+	InitScAlphabetProgressYearlyRoutes(r, db)
+
+	InitScSubjectListSemesterRoutes(r, db)
+
+	InitScSubjectListSemesterYearlyRoutes(r, db)
+
+	InitScGradeRoutes(r, db)
+
+	InitScTemplateHabitsRoutes(r, db)
+
+	InitScAcademicProjectionRoutes(r, db)
+
+	InitScAcademicProjectionDetailRoutes(r, db)
+
+	InitScStudentRoutes(r, db)
+
+	InitScAcademicYearRoutes(r, db)
+
+	InitScLearningCenterRoutes(r, db)
+
+	InitScSubjectTypeGeneralRoutes(r, db)
+
+	InitScTeacherRoutes(r, db)
+
+	InitScSubjectTypeGeneralSubjectRoutes(r, db)
+
+	InitSCUserRoutes(r, db)
+
+	InitTypeUserAplikasiRoutes(r, db)
+
+	// Tambah ini di routes.go Anda:
+
+	InitScPembelianBukuRoutes(r, db)
+
+	InitXenditRoutes(r, db)
+
 	// nanti bisa ditambahkan route lain, misal product, order, dsb
 	// InitProductRoutes(r, db)
 }

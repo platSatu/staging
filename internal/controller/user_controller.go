@@ -192,44 +192,166 @@ func (uc *UserController) DeleteUser(c *gin.Context) {
 //			},
 //		})
 //	}
+// func (uc *UserController) GetProfile(c *gin.Context) {
+// 	authHeader := c.GetHeader("Authorization")
+// 	if authHeader == "" {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+// 		return
+// 	}
+
+// 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+// 	userID, err := helper.GetUserIDFromToken(tokenString)
+// 	if err != nil {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+// 		return
+// 	}
+
+// 	user, err := uc.Service.GetUserByID(userID)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
+// 	if user == nil {
+// 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+// 		return
+// 	}
+
+// 	// Ambil ParentID dan akses paket / aplikasi yang di daftarkan
+// 	parentID := user.ParentID
+// 	akses, _ := uc.Service.GetAksesByUser(user.ID) // misal ambil daftar aplikasi/menu
+
+//		c.JSON(http.StatusOK, gin.H{
+//			"success": true,
+//			"data": gin.H{
+//				"id":        user.ID,
+//				"full_name": user.FullName,
+//				"email":     user.Email,
+//				"username":  user.Username,
+//				"role":      user.Role,
+//				"parent_id": parentID,
+//				"akses":     akses, // array berisi aplikasi, status, dan menu yang boleh diakses
+//			},
+//		})
+//	}
+//
+// 19-02-2026
+// func (uc *UserController) GetProfile(c *gin.Context) {
+// 	authHeader := c.GetHeader("Authorization")
+// 	if authHeader == "" {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+// 		return
+// 	}
+
+// 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+// 	userID, err := helper.GetUserIDFromToken(tokenString)
+// 	if err != nil {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+// 		return
+// 	}
+
+// 	user, aplikasiList, hasParent, err := uc.Service.GetUserProfileWithAplikasi(userID)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
+// 	if user == nil {
+// 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+// 		return
+// 	}
+
+// 	// Ambil list aplikasi_id yang aktif
+// 	var aplikasiIDs []string
+// 	for _, app := range aplikasiList {
+// 		if app["aplikasi_id"] != nil {
+// 			aplikasiIDs = append(aplikasiIDs, app["aplikasi_id"].(string))
+// 		}
+// 	}
+
+// 	// Ambil ParentID
+// 	parentID := user.ParentID
+
+//		c.JSON(http.StatusOK, gin.H{
+//			"success": true,
+//			"data": gin.H{
+//				"id":           user.ID,
+//				"full_name":    user.FullName,
+//				"email":        user.Email,
+//				"username":     user.Username,
+//				"role":         user.Role,
+//				"status":       user.Status,
+//				"parent_id":    parentID,
+//				"has_parent":   hasParent,
+//				"aplikasi":     aplikasiList,
+//				"aplikasi_ids": aplikasiIDs,
+//			},
+//		})
+//	}
 func (uc *UserController) GetProfile(c *gin.Context) {
+	// 1. Validasi Authorization Header
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Authorization header missing",
+		})
 		return
 	}
 
+	// 2. Ekstrak userID dari token
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	userID, err := helper.GetUserIDFromToken(tokenString)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid token",
+		})
 		return
 	}
 
-	user, err := uc.Service.GetUserByID(userID)
+	// 3. Panggil service untuk ambil data profil
+	user, responseData, err := uc.Service.GetUserProfileWithAplikasi(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		statusCode := http.StatusInternalServerError
+		if err.Error() == "user not found" {
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
 		return
 	}
 
-	// Ambil ParentID dan akses paket / aplikasi yang di daftarkan
-	parentID := user.ParentID
-	akses, _ := uc.Service.GetAksesByUser(user.ID) // misal ambil daftar aplikasi/menu
+	// 4. Ekstrak data untuk response
+	packageInfo := responseData["package"]
+	aplikasiList := responseData["aplikasi"].([]map[string]interface{})
+	menuAccess := responseData["menu_access"].(map[string]interface{})
 
+	// 5. Ambil list aplikasi_ids
+	var aplikasiIDs []string
+	for _, app := range aplikasiList {
+		if app["aplikasi_id"] != nil {
+			aplikasiIDs = append(aplikasiIDs, app["aplikasi_id"].(string))
+		}
+	}
+
+	// 6. Response sukses
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"message": "Profile retrieved successfully",
 		"data": gin.H{
-			"id":        user.ID,
-			"full_name": user.FullName,
-			"email":     user.Email,
-			"username":  user.Username,
-			"role":      user.Role,
-			"parent_id": parentID,
-			"akses":     akses, // array berisi aplikasi, status, dan menu yang boleh diakses
+			"id":             user.ID,
+			"full_name":      user.FullName,
+			"email":          user.Email,
+			"username":       user.Username,
+			"role":           user.Role,
+			"status":         user.Status,
+			"parent_id":      responseData["parent_id"],
+			"has_parent":     responseData["has_parent"],
+			"aplikasi":       aplikasiList,
+			"aplikasi_ids":   aplikasiIDs,
+			"package_status": packageInfo,
+			"menu_access":    menuAccess,
 		},
 	})
 }

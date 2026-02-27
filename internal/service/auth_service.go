@@ -143,6 +143,10 @@ func (s *AuthService) Login(req request.LoginRequest) (map[string]interface{}, e
 		return nil, errors.New("email tidak terdaftar")
 	}
 
+	if user.Status == "inactive" {
+		return nil, errors.New("akun Anda tidak aktif. Silakan hubungi admin")
+	}
+
 	// Jika password hash kosong → error
 	if len(user.Password) == 0 {
 		return nil, errors.New("password pada server tidak valid")
@@ -172,29 +176,84 @@ func (s *AuthService) Login(req request.LoginRequest) (map[string]interface{}, e
 	}, nil
 }
 
-func (s *AuthService) Refresh(refreshToken string) (map[string]interface{}, error) {
+// func (s *AuthService) Refresh(refreshToken string) (map[string]interface{}, error) {
+// 	var rt model.RefreshToken
+// 	if err := s.DB.Where("token = ? AND revoked = ?", refreshToken, false).First(&rt).Error; err != nil {
+// 		return nil, errors.New("refresh token tidak valid")
+// 	}
+
+// 	if time.Now().After(rt.ExpiresAt) {
+// 		return nil, errors.New("refresh token expired")
+// 	}
+
+// 	var user model.User
+// 	if err := s.DB.First(&user, "id = ?", rt.UserID).Error; err != nil {
+// 		return nil, errors.New("user tidak ditemukan")
+// 	}
+
+// 	accessToken, err := s.generateAccessToken(user)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+//		return map[string]interface{}{
+//			"access_token": accessToken,
+//		}, nil
+//	}
+func (s *AuthService) Refresh(oldRefreshToken string) (string, string, error) {
 	var rt model.RefreshToken
-	if err := s.DB.Where("token = ? AND revoked = ?", refreshToken, false).First(&rt).Error; err != nil {
-		return nil, errors.New("refresh token tidak valid")
+
+	// 1️⃣ Cari refresh token di DB
+	if err := s.DB.Where("token = ?", oldRefreshToken).First(&rt).Error; err != nil {
+		return "", "", errors.New("refresh token tidak valid")
 	}
 
+	// 2️⃣ Pastikan token belum expired
 	if time.Now().After(rt.ExpiresAt) {
-		return nil, errors.New("refresh token expired")
+		return "", "", errors.New("refresh token sudah kadaluarsa")
 	}
 
+	// 3️⃣ Ambil user terkait
 	var user model.User
 	if err := s.DB.First(&user, "id = ?", rt.UserID).Error; err != nil {
-		return nil, errors.New("user tidak ditemukan")
+		return "", "", errors.New("user tidak ditemukan")
 	}
 
-	accessToken, err := s.generateAccessToken(user)
+	// 4️⃣ Gunakan transaksi supaya revoke token lama + create token baru aman
+	tx := s.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Revoke token lama
+	if err := tx.Delete(&rt).Error; err != nil {
+		tx.Rollback()
+		return "", "", errors.New("gagal hapus refresh token lama")
+	}
+
+	// 5️⃣ Generate access token baru
+	newAccessToken, err := s.generateAccessToken(user)
 	if err != nil {
-		return nil, err
+		tx.Rollback()
+		return "", "", errors.New("gagal generate access token baru")
 	}
 
-	return map[string]interface{}{
-		"access_token": accessToken,
-	}, nil
+	// 6️⃣ Generate refresh token baru
+	newRefreshToken, _, err := s.generateRefreshToken(user)
+	if err != nil {
+		tx.Rollback()
+		return "", "", errors.New("gagal generate refresh token baru")
+	}
+
+	// Commit transaksi
+	if err := tx.Commit().Error; err != nil {
+		return "", "", errors.New("gagal commit transaksi refresh token")
+	}
+
+	// 7️⃣ Return kedua token
+	return newAccessToken, newRefreshToken, nil
 }
 
 // ================= Logout =================

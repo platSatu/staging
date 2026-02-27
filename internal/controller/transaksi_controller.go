@@ -133,3 +133,33 @@ func (tc *TransaksiController) DeleteTransaksi(c *gin.Context) {
 		"message": "Transaksi deleted",
 	})
 }
+
+// GetTransaksiByUser returns transaksi based on user login
+// GetTransaksiByUser returns transaksi based on parent_id
+func (tc *TransaksiController) GetTransaksiByUser(c *gin.Context) {
+	// Ambil user_id dari token
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "unauthorized",
+		})
+		return
+	}
+
+	// Langsung gunakan userID sebagai parent_id
+	// Tampilkan semua transaksi dimana parent_id = user yang login
+	transaksis, err := tc.Service.GetTransaksiByParentID(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    transaksis,
+	})
+}

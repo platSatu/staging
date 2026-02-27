@@ -23,7 +23,7 @@ func InitTransaksiRoutes(r *gin.Engine, db *gorm.DB) {
 			middleware.AuthMiddleware(userService),
 			middleware.RoleMiddleware("admin", "user"),
 		)
-
+		transaksiGroup.GET("/user", transaksiController.GetTransaksiByUser)
 		transaksiGroup.POST("", transaksiController.CreateTransaksi)
 		transaksiGroup.GET("", transaksiController.GetAllTransaksi)
 		transaksiGroup.GET("/:id", transaksiController.GetTransaksiByID)

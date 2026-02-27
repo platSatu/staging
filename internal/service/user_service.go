@@ -131,7 +131,7 @@ func (s *UserService) CreateUser(user *model.User) error {
 // READ ALL
 func (s *UserService) GetAllUsers() ([]model.User, error) {
 	var users []model.User
-	result := s.DB.Find(&users)
+	result := s.DB.Order("created_at DESC").Find(&users)
 	return users, result.Error
 }
 
@@ -263,29 +263,316 @@ func (s *UserService) generateKodeReferal(username string) (string, error) {
 	return "", fmt.Errorf("gagal generate kode referal unik setelah 100 percobaan")
 }
 
-// GetUserProfile ambil profile user berdasarkan userID
-func (s *UserService) GetUserProfile(userID string) (*model.User, error) {
-	return s.GetUserByID(userID)
+// GetUserProfileWithAplikasi - Ambil profile user dengan aplikasi dan menu access
+// GetUserProfileWithAplikasi
+func (s *UserService) GetUserProfileWithAplikasi(userID string) (*model.User, map[string]interface{}, error) {
+	var user model.User
+	if err := s.DB.First(&user, "id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, fmt.Errorf("user not found")
+		}
+		return nil, nil, err
+	}
+
+	hasParent := user.ParentID != nil && *user.ParentID != ""
+
+	response := map[string]interface{}{
+		"user":         user,
+		"parent_id":    user.ParentID,
+		"has_parent":   hasParent,
+		"package":      nil,
+		"aplikasi":     []map[string]interface{}{},
+		"aplikasi_ids": []string{},
+		"menu_access":  map[string]interface{}{},
+	}
+
+	// ✅ Hanya proses aplikasi, paket, dan menu access untuk role "user"
+	// Admin tidak memerlukan ini
+	if user.Role == "user" {
+		// Ambil daftar aplikasi user
+		aplikasiList, aplikasiIDs, err := s.GetUserApplications(userID)
+		if err != nil {
+			return nil, nil, err
+		}
+		response["aplikasi"] = aplikasiList
+		response["aplikasi_ids"] = aplikasiIDs
+
+		// Ambil info paket dan menu access
+		packageInfo := s.CheckUserActivePackage(userID)
+		menuAccess := s.GetUserMenuAccess(hasParent, packageInfo)
+
+		response["package"] = packageInfo
+		response["menu_access"] = menuAccess
+	} else if user.Role == "admin" {
+		// Admin mendapat akses penuh
+		response["menu_access"] = s.GetAdminMenuAccess()
+	} else {
+		return nil, nil, fmt.Errorf("unknown role: %s", user.Role)
+	}
+
+	return &user, response, nil
 }
 
-func (s *UserService) GetAksesByUser(userID string) ([]map[string]interface{}, error) {
-	var aksesList []map[string]interface{}
+// GetUserApplications - Ambil daftar aplikasi user DAN return IDs
+func (s *UserService) GetUserApplications(userID string) ([]map[string]interface{}, []string, error) {
+	var aplikasiList []map[string]interface{}
+	var aplikasiIDs []string
 
-	// Ambil data type_user_aplikasi dari DB
-	var typeUser []model.TypeUserAplikasi
-	err := s.DB.Where("user_id = ?", userID).Find(&typeUser).Error
+	rows, err := s.DB.Table("type_user_aplikasi tua").
+		Select("tua.id, tua.user_id, tua.parent_id, tua.aplikasi_id, tua.status, ca.name as aplikasi_name").
+		Joins("LEFT JOIN category_aplikasi ca ON tua.aplikasi_id = ca.id").
+		Where("tua.user_id = ?", userID).
+		Where("tua.status = ?", "active").
+		Rows()
+
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tuaID, userID, parentID, aplikasiID, status, aplikasiName string
+
+		err := rows.Scan(&tuaID, &userID, &parentID, &aplikasiID, &status, &aplikasiName)
+		if err != nil {
+			continue
+		}
+
+		aplikasi := map[string]interface{}{
+			"id":            tuaID,
+			"user_id":       userID,
+			"parent_id":     parentID,
+			"aplikasi_id":   aplikasiID,
+			"aplikasi_name": aplikasiName,
+			"status":        status,
+		}
+
+		aplikasiList = append(aplikasiList, aplikasi)
+		aplikasiIDs = append(aplikasiIDs, aplikasiID)
 	}
 
-	// Format data sesuai kebutuhan frontend
-	for _, t := range typeUser {
-		aksesList = append(aksesList, map[string]interface{}{
-			"aplikasi_id": t.AplikasiID,
-			"status":      t.Status,
-			"parent_id":   t.ParentID,
-		})
+	return aplikasiList, aplikasiIDs, nil
+}
+
+// GetAdminMenuAccess - Menu akses untuk admin (akses penuh)
+func (s *UserService) GetAdminMenuAccess() map[string]interface{} {
+	return map[string]interface{}{
+		"can_access_all":     true,
+		"role":               "admin",
+		"has_active_package": true,
+		"allowed_menus": []string{
+			"dashboard",
+			"user_management",
+			"application_management",
+			"package_management",
+			"report",
+			"settings",
+		},
+	}
+}
+
+// GetUserMenuAccess - Menu akses untuk user (DI PERBAIKI)
+func (s *UserService) GetUserMenuAccess(hasParent bool, packageInfo map[string]interface{}) map[string]interface{} {
+
+	hasActivePackage := false
+	packageName := ""
+
+	if packageInfo != nil {
+		if val, ok := packageInfo["has_active_package"].(bool); ok {
+			hasActivePackage = val
+		}
+		if val, ok := packageInfo["package_name"].(string); ok {
+			// 🔥 NORMALIZE: lowercase dan trim spasi
+			packageName = strings.ToLower(strings.TrimSpace(val))
+		}
 	}
 
-	return aksesList, nil
+	menus := []string{}
+
+	// 🔥 CHILD USER
+	if hasParent {
+		if hasActivePackage {
+			menus = []string{
+				"dashboard",
+				"my_application",
+				"profile",
+			}
+		} else {
+			menus = []string{
+				"dashboard",
+				"profile",
+			}
+		}
+	} else {
+		// 🔥 USER UTAMA
+		if hasActivePackage {
+
+			// 🔥 CEK BERDASARKAN NORMALIZED NAME
+			switch packageName {
+			case "premium":
+				menus = []string{
+					"dashboard",
+					"my_application",
+					"add_application",
+					"child_user_management",
+					"report",
+					"profile",
+				}
+
+			case "basic":
+				menus = []string{
+					"dashboard",
+					"my_application",
+					"add_application",
+					"profile",
+				}
+
+			// 🔥 TRIAL APLIKASI PEMBAYARAN atau TRIAL saja
+			case "trial aplikasi pembayaran", "trial aplikasi", "trial":
+				menus = []string{
+					"dashboard",
+					"my_application",
+					"add_application",
+					"profile",
+				}
+
+			default:
+				// 🔥 FALLBACK: Jika package name tidak dikenali
+				// Cek apakah mengandung kata kunci
+				if strings.Contains(packageName, "premium") {
+					menus = []string{
+						"dashboard",
+						"my_application",
+						"add_application",
+						"child_user_management",
+						"report",
+						"profile",
+					}
+				} else if strings.Contains(packageName, "basic") {
+					menus = []string{
+						"dashboard",
+						"my_application",
+						"add_application",
+						"profile",
+					}
+				} else if strings.Contains(packageName, "trial") {
+					menus = []string{
+						"dashboard",
+						"my_application",
+						"add_application",
+						"profile",
+					}
+				} else {
+					// Default jika tidak match sama sekali
+					menus = []string{
+						"dashboard",
+						"profile",
+					}
+				}
+			}
+
+		} else {
+			menus = []string{
+				"dashboard",
+				"profile",
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"can_access_all":     false,
+		"role":               "user",
+		"has_parent":         hasParent,
+		"has_active_package": hasActivePackage,
+		"package_name":       packageName,
+		"allowed_menus":      menus,
+	}
+}
+
+// CheckUserActivePackage - Cek paket aktif user dari tabel vouchers (Status: Used)
+// CheckUserActivePackage - Cek paket aktif user (cek parent juga)
+func (s *UserService) CheckUserActivePackage(userID string) map[string]interface{} {
+	var user model.User
+	if err := s.DB.First(&user, "id = ?", userID).Error; err != nil {
+		fmt.Printf("[DEBUG] User %s: Tidak ditemukan\n", userID)
+		return map[string]interface{}{
+			"has_active_package": false,
+			"package_name":       nil,
+			"package_id":         nil,
+			"expired_at":         nil,
+			"status":             "inactive",
+			"kode_voucher":       nil,
+		}
+	}
+
+	// ✅ CEK VOUCHER USER ITU SENDIRI
+	var voucher model.Voucher
+	err := s.DB.Table("vouchers v").
+		Where("v.user_id = ?", userID).
+		Where("v.status = ?", "used").
+		Where("v.valid_until > ?", time.Now()).
+		Order("v.created_at DESC").
+		First(&voucher).Error
+
+	if err == nil {
+		// ✅ DITEMUKAN VOUCHER USER - PAKET AKTIF
+		var pkg model.Packages
+		s.DB.First(&pkg, "id = ?", voucher.PackagesID)
+
+		fmt.Printf("[DEBUG] User %s: Paket aktif (voucher sendiri)\n", userID)
+
+		return map[string]interface{}{
+			"has_active_package": true,
+			"package_id":         voucher.PackagesID,
+			"package_name":       pkg.Name,
+			"kode_voucher":       voucher.KodeVoucher,
+			"valid_from":         voucher.ValidFrom,
+			"expired_at":         voucher.ValidUntil,
+			"status":             voucher.Status,
+		}
+	}
+
+	// ❌ TIDAK ADA VOUCHER SENDIRI - CEK PARENT
+	if user.ParentID != nil && *user.ParentID != "" {
+		fmt.Printf("[DEBUG] User %s: Cek voucher parent %s\n", userID, *user.ParentID)
+
+		var parentVoucher model.Voucher
+		errParent := s.DB.Table("vouchers v").
+			Where("v.user_id = ?", *user.ParentID).
+			Where("v.status = ?", "used").
+			Where("v.valid_until > ?", time.Now()).
+			Order("v.created_at DESC").
+			First(&parentVoucher).Error
+
+		if errParent == nil {
+			// ✅ DITEMUKAN VOUCHER PARENT - PAKET AKTIF (WARISAN)
+			var pkg model.Packages
+			s.DB.First(&pkg, "id = ?", parentVoucher.PackagesID)
+
+			fmt.Printf("[DEBUG] User %s: Paket aktif (warisan dari parent)\n", userID)
+
+			return map[string]interface{}{
+				"has_active_package": true,
+				"package_id":         parentVoucher.PackagesID,
+				"package_name":       pkg.Name,
+				"kode_voucher":       parentVoucher.KodeVoucher,
+				"valid_from":         parentVoucher.ValidFrom,
+				"expired_at":         parentVoucher.ValidUntil,
+				"status":             parentVoucher.Status,
+				"inherited_from":     *user.ParentID, // ✅ TAMBAHAN: Tandai ini warisan
+			}
+		}
+	}
+
+	// ❌ TIDAK ADA PAKET SAMA SEKALI
+	fmt.Printf("[DEBUG] User %s: Tidak punya paket aktif\n", userID)
+
+	return map[string]interface{}{
+		"has_active_package": false,
+		"package_name":       nil,
+		"package_id":         nil,
+		"expired_at":         nil,
+		"status":             "inactive",
+		"kode_voucher":       nil,
+	}
 }
